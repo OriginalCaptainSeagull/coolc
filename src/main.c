@@ -1,5 +1,7 @@
 #include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include "main.h"
 
 int main (void)
@@ -9,16 +11,36 @@ int main (void)
 	tree_node* tree;
 	double result;
 
-	printf (" > ");
-	string = get_line();
-	lexem_chain = lexemize (string);
-	free (string);
-	tree = lexem_list_to_tree (lexem_chain);
-	if (tree == NULL)
-		return 1;
-	rm_lexem_chain (lexem_chain);
-	result = eval (tree);
-	clear_tree (tree);
-	printf ("Result: %lf\n", result);
+	puts ("Enter \'q\' to finish session");
+	while (true)
+	{
+		printf (" > ");
+		string = get_line();
+		if (quit_ (string))
+		{
+			free (string);
+			return 0;
+		}
+		lexem_chain = lexemize (string);
+		free (string);
+		string = NULL;
+		if (lexem_chain == NULL)
+		{
+			error (E_STRANGE); /* unrecognized pattern */
+			continue;
+		}
+		tree = lexem_list_to_tree (lexem_chain);
+		rm_lexem_chain (lexem_chain);
+		lexem_chain = NULL;
+		if (tree == NULL)
+		{
+			error (E_SYNTAX);
+			continue;
+		}
+		result = eval (tree);
+		printf ("Result: %lf\n", result);
+		clear_tree (tree);
+		tree = NULL;
+	}
 	return 0;
 }

@@ -18,6 +18,8 @@ struct stack_of_trees;
 typedef struct stack_of_trees
 {
 	tree_node* tree;
+	tree_node* proxy_op;
+	tree_node* proxy_num;
 	struct stack_of_trees* next;
 	struct stack_of_trees* prev;
 } stack_of_trees;

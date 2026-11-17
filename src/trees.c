@@ -3,7 +3,6 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdbool.h>
-#include "error_t.h"
 #include "trees.h"
 
 tree_node* init_tree_node (token_type what, ...)
@@ -13,6 +12,8 @@ tree_node* init_tree_node (token_type what, ...)
 	tree_node* node = malloc (sizeof (tree_node));
 	node->what = what;
 	node->above = NULL;
+	node->right = NULL;
+	node->left = NULL;
 	switch (what)
 	{
 		case NUM:
@@ -33,14 +34,13 @@ void clear_tree (tree_node* root)
 {
 	if (root == NULL)
 		return;
-	tree_node* cleaner = root;
-	while (root != NULL)
-	{
-		clear_tree (root->right);
-		cleaner = root;
-		root = root->left;
-		free (cleaner);
-	}
+	tree_node* right;
+	tree_node* left;
+	right = root->right;
+	left = root->left;
+	free (root);
+	clear_tree (right);
+	clear_tree (left);
 	return;
 }
 
@@ -49,7 +49,9 @@ stack_of_trees* init_stack_of_trees (void)
 	stack_of_trees* node = malloc (sizeof (stack_of_trees));
 	node->next = NULL;
 	node->prev = NULL;
-	node->tree =init_tree_node (EMPTY);
+	node->proxy_num = NULL;
+	node->tree = NULL;
+	node->proxy_op = NULL;
 	return node;
 }
 
@@ -105,8 +107,10 @@ stack_of_trees* push_to_tree_stack (stack_of_trees* stack)
 	while (stack->next != NULL)
 		stack = stack->next;
 	stack->next = init_stack_of_trees ();
-	stack->next->prev = stack;
-	return stack->next;
+	stack_of_trees* temp = stack;
+	stack = stack->next;
+	stack->prev = temp;
+	return stack;
 }
 
 tree_node* pull_from_tree_stack (stack_of_trees* stack)
@@ -126,8 +130,8 @@ tree_node* lexem_list_to_tree (lexem* list)
 {
 	stack_of_trees* stack = init_stack_of_trees ();
 	stack->tree = init_tree_node (EMPTY);
-	tree_node* proxy_nums = NULL;
-	tree_node* proxy_operators = stack->tree;
+	stack->proxy_op = stack->tree;
+	tree_node* temp;
 	tree_node* retval = stack->tree;
 	bool turn = LEFT;
 	expect_t expect = PRNTH | NUM;
@@ -138,13 +142,13 @@ tree_node* lexem_list_to_tree (lexem* list)
 		switch (list->what)
 		{
 			case NUM:
-				expect = BIN_OPRTR;
-				proxy_nums = init_tree_node (NUM, list->value.num);
-				proxy_nums->above = proxy_operators;
-				if (turn == LEFT)
-					proxy_operators->left = proxy_nums;
+				expect = BIN_OPRTR | PRNTH;
+				stack->proxy_num = init_tree_node (NUM, list->value.num);
+				stack->proxy_num->above = stack->proxy_op;
+				if (turn == LEFT) 
+					stack->proxy_op->left = stack->proxy_num;
 				else
-					proxy_operators->right = proxy_nums;
+					stack->proxy_op->right = stack->proxy_num;
 				break;
 
 			case BIN_OPRTR:
@@ -161,42 +165,91 @@ tree_node* lexem_list_to_tree (lexem* list)
 					/* priority 1 ops */
 					case ADD:
 					case SUB:
-						proxy_operators = init_tree_node (BIN_OPRTR, list->value.other);
-						proxy_operators->left = stack->tree;
-						stack->tree->above = proxy_operators;
-						stack->tree = proxy_operators;
+						stack->proxy_op = init_tree_node (BIN_OPRTR, list->value.other);
+						stack->proxy_op->left = stack->tree;
+						stack->tree->above = stack->proxy_op;
+						stack->tree = stack->proxy_op;
 						turn = RIGHT;
 						break;
 
 					/* priority 2 ops */
 					case MUL:
 					case DIV:
-						proxy_operators->right = init_tree_node (BIN_OPRTR, list->value.other);
-						proxy_operators = proxy_operators->right;
-						proxy_operators->left = proxy_nums;
+						temp = stack->proxy_op->right;
+						stack->proxy_op->right = init_tree_node (BIN_OPRTR, list->value.other);
+						stack->proxy_op = stack->proxy_op->right;
+						stack->proxy_op->left =	temp;
+						temp->above = stack->proxy_op;
 						turn = RIGHT;
-						proxy_nums->above = proxy_operators;
 						break;
 						
 				}
 				break;
 
 			case PRNTH:
+				expect = PRNTH | NUM;
+				switch (list->value.other)
+				{
+					case OPEN_RB: /* opening right bracket */
+						stack = push_to_tree_stack (stack);
+						stack->tree = init_tree_node (EMPTY);
+						stack->proxy_op = stack->tree;
+						turn = LEFT;
+						break;
+
+					case CLOSE_RB:
+						expect = BIN_OPRTR | PRNTH;
+						if (stack->prev == NULL)
+							goto _ERR;
+						stack = stack->prev;
+						temp = pull_from_tree_stack (stack);
+						if (temp == EMPTY)
+						{
+							if (temp->left != NULL)
+							{
+								temp = temp->left;
+								free (temp->above);
+							}
+							else
+							{
+								temp->what = NUM;
+								temp->value.num = 0.0;
+							}
+						}
+						temp->above = stack->proxy_op;
+						if (stack->proxy_op->left == NULL)
+						{
+							stack->proxy_op->left = temp;
+							turn = LEFT;
+							break;
+						}
+						stack->proxy_op->right = temp;
+						stack->proxy_op = init_tree_node (EMPTY);
+						stack->proxy_op->left = stack->tree;
+						stack->tree->above = stack->proxy_op;
+						stack->tree = stack->proxy_op;
+						turn = LEFT;
+						break;
+				}
+				break;
+
 			case UN_OPRTR:
+				goto _ERR;
 			case EMPTY:
+				goto _ERR;
 			default:
 				goto _ERR;
 		}
 		list = list->next;
 	}
+	if (stack->prev != NULL)
+		goto _ERR;
+	retval = stack->tree;
 	kill_stack_tree (stack);
 	goto _NORMAL_EXIT;
 _ERR:
-	error (E_SYNTAX);
 	kill_stack_and_trees (stack);
 	retval = NULL;
 _NORMAL_EXIT:
-	if (retval != NULL)
-		GO_TO_TOP(retval);
 	return retval;
 }

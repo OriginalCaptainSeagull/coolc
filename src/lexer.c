@@ -3,7 +3,6 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include "tokens.h"
-void error (const int);
 char* atod (char*, double*);
 
 lexem* init_lexem (enum token_type what, ...)
@@ -64,6 +63,16 @@ lexem* lexemize (char* string)
 			end->next = init_lexem (BIN_OPRTR, DIV);
 		else if (*string == '*')
 			end->next = init_lexem (BIN_OPRTR, MUL);
+		else if (*string == '(')
+			end->next = init_lexem (PRNTH, OPEN_RB);
+		else if (*string == ')')
+			end->next = init_lexem (PRNTH, CLOSE_RB);
+		else
+		{
+			rm_lexem_chain (start);
+			start = NULL;
+			goto ENDD;
+		}
 
 		++string;
 		end = end->next;
@@ -72,5 +81,6 @@ lexem* lexemize (char* string)
 	start = start->next;
 	free (temp);
 	temp = start;
+ENDD:
 	return start;
 }

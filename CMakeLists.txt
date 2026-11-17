@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 4.4.5)
+cmake_minimum_required (VERSION 4.3.4)
 project (coolcalator)
 add_executable (coolc)
 add_library (maeth)

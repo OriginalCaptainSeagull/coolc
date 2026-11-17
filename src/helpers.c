@@ -6,9 +6,17 @@
 #define ASCII_ZERO 48
 #define ASCII_NINE 57
 
+bool quit_ (char* str)
+{
+	while (isspace (*str)) ++str;
+	if (*str == 'q' || *str == 'Q')
+		return true;
+	return false;
+}
+
 char* get_line (void)
 {
-	char* line = malloc (1024);
+	char* line = calloc (1024, 1);
 	size_t sz = 1024;
 	char* iter = line;
 	char* end = line + 1023;
@@ -75,6 +83,7 @@ char* atod (char* string, double* num)
 			break;
 	
 		case '+':
+			++string;
 			break;
 
 		default:
@@ -87,5 +96,5 @@ _CONVERSION:
 _RAT:
 	string = get_rational (string, &rational_pt);
 	*num = (negative) ? rational_pt + whole_pt : -1.0 * (rational_pt + whole_pt);
-	return string;
+	return string - 1;
 }
